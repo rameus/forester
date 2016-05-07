@@ -24,6 +24,8 @@
 // WWW: https://sites.google.com/site/cmzmasek/home/software/forester
 
 package org.forester.archaeopteryx;
+import com.beust.jcommander.Parameter;
+import com.beust.jcommander.JCommander;
 
 import java.io.File;
 
@@ -60,56 +62,57 @@ public final class Archaeopteryx {
         return MainFrameApplication.createInstance( phylogenies, config_file_name, title );
     }
 
-    public static void main( final String args[] ) {
+    @Parameter(names={"--configfile", "-c"})
+    String configfile;
+    @Parameter(names={"--treefile", "-f"})
+    String treefile;
+ 
+    public static void main(String ... args) {
+        Archaeopteryx main = new Archaeopteryx();
+        new JCommander(main, args);
+        main.run();
+    }
+ 
+    public void run() {
+        System.out.printf("Config file: %s\n", configfile);
+        System.out.printf("Tree file: %s\n", treefile);
+    
         Phylogeny[] phylogenies = null;
-        String config_filename = null;
-        Configuration conf = null;
+        Configuration conf = new Configuration( null, false, false, true );
         File f = null;
         try {
-            int filename_index = 0;
-            if ( args.length == 0 ) {
-                conf = new Configuration( null, false, false, true );
+            if (configfile != "") {
+                conf = new Configuration( configfile, false, false, true );
             }
-            else if ( args.length > 0 ) {
-                // check for a config file
-                if ( args[ 0 ].startsWith( "-c" ) ) {
-                    config_filename = args[ 1 ];
-                    filename_index += 2;
+            if (treefile != "") {
+                f = new File( treefile );
+                final String err = ForesterUtil.isReadableFile( f );
+                if ( !ForesterUtil.isEmpty( err ) ) {
+                    ForesterUtil.fatalError( Constants.PRG_NAME, err );
                 }
-                if ( args[ 0 ].startsWith( "-open" ) ) {
-                    filename_index += 1;
+                boolean nhx_or_nexus = false;
+                final PhylogenyParser p = ParserUtils.createParserDependingOnFileType( f, conf
+                                                                                       .isValidatePhyloXmlAgainstSchema() );
+                if ( p instanceof NHXParser ) {
+                    nhx_or_nexus = true;
+                    final NHXParser nhx = ( NHXParser ) p;
+                    nhx.setReplaceUnderscores( conf.isReplaceUnderscoresInNhParsing() );
+                    nhx.setIgnoreQuotes( false );
+                    nhx.setTaxonomyExtraction( conf.getTaxonomyExtraction() );
                 }
-                conf = new Configuration( config_filename, false, false, true );
-                if ( args.length > filename_index ) {
-                    f = new File( args[ filename_index ] );
-                    final String err = ForesterUtil.isReadableFile( f );
-                    if ( !ForesterUtil.isEmpty( err ) ) {
-                        ForesterUtil.fatalError( Constants.PRG_NAME, err );
-                    }
-                    boolean nhx_or_nexus = false;
-                    final PhylogenyParser p = ParserUtils.createParserDependingOnFileType( f, conf
-                                                                                           .isValidatePhyloXmlAgainstSchema() );
-                    if ( p instanceof NHXParser ) {
-                        nhx_or_nexus = true;
-                        final NHXParser nhx = ( NHXParser ) p;
-                        nhx.setReplaceUnderscores( conf.isReplaceUnderscoresInNhParsing() );
-                        nhx.setIgnoreQuotes( false );
-                        nhx.setTaxonomyExtraction( conf.getTaxonomyExtraction() );
-                    }
-                    else if ( p instanceof NexusPhylogeniesParser ) {
-                        nhx_or_nexus = true;
-                        final NexusPhylogeniesParser nex = ( NexusPhylogeniesParser ) p;
-                        nex.setReplaceUnderscores( conf.isReplaceUnderscoresInNhParsing() );
-                        nex.setIgnoreQuotes( false );
-                    }
-                    else if ( p instanceof PhyloXmlParser ) {
-                        MainFrameApplication.warnIfNotPhyloXmlValidation( conf );
-                    }
-                    phylogenies = PhylogenyMethods.readPhylogenies( p, f );
-                    if ( nhx_or_nexus && conf.isInternalNumberAreConfidenceForNhParsing() ) {
-                        for( final Phylogeny phy : phylogenies ) {
-                            PhylogenyMethods.transferInternalNodeNamesToConfidence( phy, "" );
-                        }
+                else if ( p instanceof NexusPhylogeniesParser ) {
+                    nhx_or_nexus = true;
+                    final NexusPhylogeniesParser nex = ( NexusPhylogeniesParser ) p;
+                    nex.setReplaceUnderscores( conf.isReplaceUnderscoresInNhParsing() );
+                    nex.setIgnoreQuotes( false );
+                }
+                else if ( p instanceof PhyloXmlParser ) {
+                    MainFrameApplication.warnIfNotPhyloXmlValidation( conf );
+                }
+                phylogenies = PhylogenyMethods.readPhylogenies( p, f );
+                if ( nhx_or_nexus && conf.isInternalNumberAreConfidenceForNhParsing() ) {
+                    for( final Phylogeny phy : phylogenies ) {
+                        PhylogenyMethods.transferInternalNodeNamesToConfidence( phy, "" );
                     }
                 }
             }
